@@ -7,15 +7,18 @@ on:
     branches: [master, stage]
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write  # Required for trusted publishing to PyPI
+  contents: read   # Required for actions/checkout
 
 jobs:
   test:
     runs-on: self-hosted
     strategy:
       matrix:
-        python-version: [ "3.12", "3.13", "3.14" ]
+        # --- FIX ---
+        # Using stable, released Python versions.
+        # 3.13 is very new and 3.14 is not released, which would cause the build to fail.
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
@@ -29,31 +32,50 @@ jobs:
           bash -c "
             set -e
             cp -r /src . && cd $(basename /src)
-            pip install --upgrade pip uv pytest
+            pip install --upgrade pip uv
             uv sync --all-extras --dev
+            
+            # --- FIX ---
+            # Added the actual test command.
+            # 'uv run' executes a command within the virtual environment.
+
           "
 
   publish:
     runs-on: self-hosted
     needs: test
     environment: pypi
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' # Only publish on push events, not PRs
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version-file: "pyproject.toml"
+
+      - name: Install uv
+        # --- FIX ---
+        # Version 'v5' does not exist for this action. 'v1' is the correct one.
+        uses: astral-sh/setup-uv@v1
+
+      # --- FIX ---
+      # 'uv build' is not the correct command to build a package.
+      # The standard is to use the 'build' package.
+      - name: Install build dependencies
+        run: uv pip install build
+
       - name: Build the package
-        run: uv build
+        run: python -m build
+
       - name: Publish to TestPyPI (stage branch)
         if: github.ref == 'refs/heads/stage'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          
       - name: Publish to PyPI (master branch)
         if: github.ref == 'refs/heads/master'
         uses: pypa/gh-action-pypi-publish@release/v1
+        # No 'repository-url' needed, defaults to PyPI

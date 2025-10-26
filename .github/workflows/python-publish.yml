@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         python-version: [ "3.11", "3.12", "3.13" ]
@@ -37,7 +37,7 @@ jobs:
         run: uv run pytest tests
 
   publish:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: test
     environment: pypi
     if: github.ref_type == 'tag'

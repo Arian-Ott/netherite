@@ -15,10 +15,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        # --- FIX ---
-        # Using stable, released Python versions.
-        # 3.13 is very new and 3.14 is not released, which would cause the build to fail.
-        python-version: ["3.11", "3.12"]
+        python-version: [3.11]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,11 +31,7 @@ jobs:
             cp -r /src . && cd $(basename /src)
             pip install --upgrade pip uv
             uv sync --all-extras --dev
-            
-            # --- FIX ---
-            # Added the actual test command.
-            # 'uv run' executes a command within the virtual environment.
-
+            uv run pytest
           "
 
   publish:
@@ -50,25 +43,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11.11'  # --- FIX --- Use a stable version
-
-      - name: Install uv
-        # --- FIX ---
-        # Version 'v5' does not exist for this action. 'v1' is the correct one.
-        uses: astral-sh/setup-uv@v1
-
       # --- FIX ---
-      # 'uv build' is not the correct command to build a package.
-      # The standard is to use the 'build' package.
-      - name: Install build dependencies
-        run: uv pip install build
+      # Removed 'actions/setup-python' and 'astral-sh/setup-uv'.
+      # We will now build inside a consistent Docker environment,
+      # just like the 'test' job, to avoid host runner issues.
 
-      - name: Build the package
-        run: python -m build
+      - name: Build the package inside Docker
+        run: |
+          # We use python:3.12 to match the test env
+          docker run --rm \
+          -v "$PWD":/src:ro \
+          -v "$PWD/dist":/dist_out \
+          -w /tmp/workdir \
+          python:3.12 \
+          bash -c "
+            set -e
+            cp -r /src . && cd $(basename /src)
+            # Install build tools
+            pip install --upgrade pip uv build
+            # Install dependencies (if needed for build)
+            uv sync --all-extras --dev
+            # Build and output to the mounted /dist_out volume
+            python -m build --outdir /dist_out
+          "
 
+      # The 'pypa/gh-action-pypi-publish' action will now find the
+      # artifacts created by Docker in the host's '$PWD/dist' directory.
+      
       - name: Publish to TestPyPI (stage branch)
         if: github.ref == 'refs/heads/stage'
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -79,3 +80,4 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: pypa/gh-action-pypi-publish@release/v1
         # No 'repository-url' needed, defaults to PyPI
+

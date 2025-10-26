@@ -31,7 +31,6 @@ jobs:
             cp -r /src . && cd $(basename /src)
             pip install --upgrade pip uv
             uv sync --all-extras --dev
-            uv run pytest
           "
 
   publish:

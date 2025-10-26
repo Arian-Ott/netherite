@@ -18,7 +18,6 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
-
       - name: Run tests inside Docker
         run: |
           echo "🐍 Running tests with Python ${{ matrix.python-version }}"
@@ -27,14 +26,12 @@ jobs:
             -v "$PWD":/app \
             -v "$HOME/.cache/pip":/root/.cache/pip \
             -w /app \
-            python:${{ matrix.python-version }}-slim \
+            -e UV_PROJECT_ENVIRONMENT=/tmp/.venv \
+            python:${{ matrix.python-version }} \
             bash -c "
               set -e
-              apt-get update -qq &&
-              apt-get install -y --no-install-recommends curl git &&
-              pip install --upgrade pip &&
-              pip install uv pytest &&
-              uv sync --all-extras --dev
+              pip install --upgrade pip uv pytest &&
+              uv sync --all-extras --dev 
             "
 
   publish:

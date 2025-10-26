@@ -18,21 +18,22 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
-      - name: Run tests inside Docker
+        
+      - name: Run tests inside isolated Docker container
         run: |
           echo "🐍 Running tests with Python ${{ matrix.python-version }}"
           docker run --rm \
-            -u $(id -u):$(id -g) \
-            -v "$PWD":/app \
-            -v "$HOME/.cache/pip":/root/.cache/pip \
-            -w /app \
-            -e UV_PROJECT_ENVIRONMENT=/tmp/.venv \
+            -v "$PWD":/src:ro \                     # mount your repo read-only
+            -w /tmp/workdir \                       # use a tmp directory inside container
+            -e UV_PROJECT_ENVIRONMENT=/tmp/.venv \  # venv stays in container
             python:${{ matrix.python-version }} \
             bash -c "
               set -e
-              pip install --upgrade pip uv pytest &&
-              uv sync --all-extras --dev 
+              cp -r /src . && cd $(basename /src)   # copy source into container tmpdir
+              pip install --upgrade pip uv pytest
+              uv sync --all-extras --dev
             "
+
 
   publish:
     runs-on: self-hosted

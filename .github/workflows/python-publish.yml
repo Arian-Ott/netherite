@@ -1,0 +1,66 @@
+name: Publish Python Package
+
+on:
+  push:
+    branches:
+      - master
+      - stage
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+      - stage
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.11", "3.12", "3.13" ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv and set the Python version
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+      - name: Run tests
+        run: uv run pytest tests
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    environment: pypi
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Build the package
+        run: uv build
+
+      - name: Publish to TestPyPI (stage branch)
+        if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '') && github.event.base_ref == 'refs/heads/stage'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+      - name: Publish to PyPI (master branch)
+        if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '') && github.event.base_ref == 'refs/heads/master'
+        uses: pypa/gh-action-pypi-publish@release/v1

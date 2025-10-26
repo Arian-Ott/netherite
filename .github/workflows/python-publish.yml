@@ -25,29 +25,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Automatically installs Python if missing (via pyenv)
-      - name: Ensure Python ${{ matrix.python-version }} is installed
+      - name: Run tests in Docker
         run: |
-          if ! command -v python${{ matrix.python-version }} &>/dev/null; then
-            echo "Python ${{ matrix.python-version }} not found, installing via pyenv..."
-            if ! command -v pyenv &>/dev/null; then
-              curl https://pyenv.run | bash
-              export PATH="$HOME/.pyenv/bin:$PATH"
-              eval "$(pyenv init -)"
-              eval "$(pyenv virtualenv-init -)"
-            fi
-            pyenv install -s ${{ matrix.python-version }}
-            pyenv global ${{ matrix.python-version }}
-          fi
-          python${{ matrix.python-version }} --version
-
-      - name: Install uv and set the Python version
-        uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install the project
-        run: uv sync --all-extras --dev
+          echo "Running tests with Python ${{ matrix.python-version }}"
+          docker run --rm \
+            -v "$PWD":/app \
+            -w /app \
+            python:${{ matrix.python-version }}-slim \
+            bash -c "
+              pip install --upgrade pip &&
+              pip install uv &&
+              uv sync --all-extras --dev &&
+              pytest -v
+            "
 
   publish:
     runs-on: self-hosted
@@ -59,28 +49,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure Python is installed (from pyproject)
+      - name: Build package inside Docker
         run: |
-          PY_VERSION=$(grep -oP '(?<=python = ")[0-9]+\.[0-9]+' pyproject.toml | head -1)
-          echo "Detected Python version $PY_VERSION"
-          if ! command -v python$PY_VERSION &>/dev/null; then
-            echo "Installing Python $PY_VERSION via pyenv..."
-            if ! command -v pyenv &>/dev/null; then
-              curl https://pyenv.run | bash
-              export PATH="$HOME/.pyenv/bin:$PATH"
-              eval "$(pyenv init -)"
-              eval "$(pyenv virtualenv-init -)"
-            fi
-            pyenv install -s $PY_VERSION
-            pyenv global $PY_VERSION
-          fi
-          python$PY_VERSION --version
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Build the package
-        run: uv build
+          docker run --rm \
+            -v "$PWD":/app \
+            -w /app \
+            python:3.12-slim \
+            bash -c "
+              pip install --upgrade pip &&
+              pip install uv &&
+              uv build
+            "
 
       - name: Publish to TestPyPI (stage branch)
         if: github.ref == 'refs/heads/stage'

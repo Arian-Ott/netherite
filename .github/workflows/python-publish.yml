@@ -15,7 +15,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        python-version: [3.11]
+        python-version: ["3.11"]
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +31,7 @@ jobs:
             cp -r /src . && cd $(basename /src)
             pip install --upgrade pip uv
             uv sync --all-extras --dev
+
           "
 
   publish:
@@ -49,11 +50,17 @@ jobs:
 
       - name: Build the package inside Docker
         run: |
-          # We use python:3.12 to match the test env
+          # Pass the host user's UID/GID into the container
+          # so root (inside Docker) can chown the files to match.
+          HOST_UID=$(id -u)
+          HOST_GID=$(id -g)
+          
           docker run --rm \
           -v "$PWD":/src:ro \
           -v "$PWD/dist":/dist_out \
           -w /tmp/workdir \
+          -e HOST_UID=$HOST_UID \
+          -e HOST_GID=$HOST_GID \
           python:3.12 \
           bash -c "
             set -e
@@ -64,7 +71,16 @@ jobs:
             uv sync --all-extras --dev
             # Build and output to the mounted /dist_out volume
             python -m build --outdir /dist_out
+            
+            # --- NEW FIX ---
+            # As root inside the container, change ownership
+            # of the new files in /dist_out to match the host user.
+            chown -R $HOST_UID:$HOST_GID /dist_out
           "
+
+      # --- REMOVED ---
+      # We no longer need the 'Fix dist/ permissions' step
+      # because the 'chown' is now done inside Docker.
 
       # The 'pypa/gh-action-pypi-publish' action will now find the
       # artifacts created by Docker in the host's '$PWD/dist' directory.
@@ -79,4 +95,3 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: pypa/gh-action-pypi-publish@release/v1
         # No 'repository-url' needed, defaults to PyPI
-

@@ -2,13 +2,9 @@ name: Publish Python Package
 
 on:
   push:
-    branches:
-      - master
-      - stage
+    branches: [master, stage]
   pull_request:
-    branches:
-      - master
-      - stage
+    branches: [master, stage]
 
 permissions:
   id-token: write
@@ -17,11 +13,9 @@ permissions:
 jobs:
   test:
     runs-on: self-hosted
-
     strategy:
       matrix:
-        python-version: ['3.11', '3.12']
-
+        python-version: ['3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 
@@ -29,10 +23,13 @@ jobs:
         run: |
           echo "🐍 Running tests with Python ${{ matrix.python-version }}"
           docker run --rm \
+            -u $(id -u):$(id -g) \
             -v "$PWD":/app \
+            -v "$HOME/.cache/pip":/root/.cache/pip \
             -w /app \
             python:${{ matrix.python-version }}-slim \
             bash -c "
+              set -e
               apt-get update -qq &&
               apt-get install -y --no-install-recommends curl git &&
               pip install --upgrade pip &&
@@ -48,24 +45,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version-file: "pyproject.toml"
-
       - name: Build the package
         run: uv build
-
       - name: Publish to TestPyPI (stage branch)
         if: github.ref == 'refs/heads/stage'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-
       - name: Publish to PyPI (master branch)
         if: github.ref == 'refs/heads/master'
         uses: pypa/gh-action-pypi-publish@release/v1

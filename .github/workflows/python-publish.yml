@@ -29,10 +29,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}}
       - name: Install the project
-        run: |
-          uv python install 3.11
-          uv python install 3.12
-          uv python install 3.13
+        run: 
           uv sync --all-extras --dev
 
   publish:
@@ -53,6 +50,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version-file: "pyproject.toml"
+        
 
       - name: Build the package
         run: uv build
